@@ -10,6 +10,21 @@ A bash script to check your GitHub Copilot Premium request usage **via API** and
 - ✅ Provides hourly usage recommendations
 - ✅ Color-coded warnings when running low
 - ✅ Historical tracking (optional)
+- ✅ **Cross-machine tracking via Laravel server** (optional)
+
+## 🌐 Cross-Machine Tracking (Optional)
+
+For tracking usage across multiple machines, deploy the included Laravel app:
+
+```bash
+# Set the server URL
+export COPILOT_TRACKER_URL="https://your-server.laravel.cloud"
+
+# Script will automatically use the server if available
+./check-copilot-usage.sh
+```
+
+See [copilot-tracker/README.md](copilot-tracker/README.md) for server setup.
 
 ## The Discovery
 
@@ -30,6 +45,7 @@ This endpoint returns:
 - `gh` (GitHub CLI) - [Install from here](https://cli.github.com/)
 - `jq` - JSON parser
 - `bc` - Calculator for bash
+- `curl` (for server mode)
 
 ## Installation
 

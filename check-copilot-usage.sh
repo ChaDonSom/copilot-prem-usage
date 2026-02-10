@@ -2,6 +2,7 @@
 
 # GitHub Copilot Premium Request Usage Checker
 # Checks premium model request usage and provides daily recommendations
+# Supports optional remote server for cross-machine tracking
 
 set -e
 
@@ -13,7 +14,243 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}=== GitHub Copilot Premium Request Usage ===${NC}\n"
+# Configuration
+COPILOT_TRACKER_URL="${COPILOT_TRACKER_URL:-}"
+FORCE_REFRESH=false
+USE_LOCAL=false
+SHOW_HELP=false
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --server)
+            COPILOT_TRACKER_URL="$2"
+            shift 2
+            ;;
+        --force-refresh)
+            FORCE_REFRESH=true
+            shift
+            ;;
+        --local)
+            USE_LOCAL=true
+            shift
+            ;;
+        --help|-h)
+            SHOW_HELP=true
+            shift
+            ;;
+        *)
+            echo -e "${RED}Unknown option: $1${NC}"
+            exit 1
+            ;;
+    esac
+done
+
+if [ "$SHOW_HELP" = true ]; then
+    echo "GitHub Copilot Premium Usage Checker"
+    echo ""
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --server <URL>    Copilot Tracker server URL (or set COPILOT_TRACKER_URL env var)"
+    echo "  --force-refresh   Force a fresh check from GitHub (when using server)"
+    echo "  --local           Force local check even if server is available"
+    echo "  --help, -h        Show this help message"
+    echo ""
+    echo "Environment Variables:"
+    echo "  COPILOT_TRACKER_URL  Default server URL for cross-machine tracking"
+    echo ""
+    exit 0
+fi
+
+# Function to check if server is available
+check_server_health() {
+    local url="$1"
+    if curl -sf --max-time 3 "${url}/health" > /dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
+
+# Function to get GitHub token
+get_github_token() {
+    if command -v gh &> /dev/null && gh auth status &> /dev/null 2>&1; then
+        gh auth token
+    else
+        echo ""
+    fi
+}
+
+# Function to fetch usage from server
+fetch_from_server() {
+    local url="$1"
+    local token="$2"
+    local endpoint="/api/usage"
+    
+    if [ "$FORCE_REFRESH" = true ]; then
+        endpoint="/api/usage/refresh"
+        local response=$(curl -sf --max-time 10 -X POST \
+            -H "Authorization: Bearer $token" \
+            -H "Accept: application/json" \
+            "${url}${endpoint}" 2>&1)
+    else
+        local response=$(curl -sf --max-time 10 \
+            -H "Authorization: Bearer $token" \
+            -H "Accept: application/json" \
+            "${url}${endpoint}" 2>&1)
+    fi
+    
+    if [ $? -eq 0 ] && [ -n "$response" ]; then
+        echo "$response"
+        return 0
+    fi
+    return 1
+}
+
+# Function to fetch today's usage from server
+fetch_today_from_server() {
+    local url="$1"
+    local token="$2"
+    
+    local response=$(curl -sf --max-time 10 \
+        -H "Authorization: Bearer $token" \
+        -H "Accept: application/json" \
+        "${url}/api/usage/today" 2>&1)
+    
+    if [ $? -eq 0 ] && [ -n "$response" ]; then
+        echo "$response"
+        return 0
+    fi
+    return 1
+}
+
+# Function to display server-based results
+display_server_results() {
+    local usage_data="$1"
+    local today_data="$2"
+    
+    local username=$(echo "$usage_data" | jq -r '.username')
+    local copilot_plan=$(echo "$usage_data" | jq -r '.copilot_plan')
+    local quota_limit=$(echo "$usage_data" | jq -r '.usage.quota_limit')
+    local remaining=$(echo "$usage_data" | jq -r '.usage.remaining')
+    local used=$(echo "$usage_data" | jq -r '.usage.used')
+    local percent_remaining=$(echo "$usage_data" | jq -r '.usage.percent_remaining')
+    local reset_date=$(echo "$usage_data" | jq -r '.usage.reset_date')
+    local checked_at=$(echo "$usage_data" | jq -r '.checked_at')
+    local cached=$(echo "$usage_data" | jq -r '.cached')
+    
+    echo -e "User: ${GREEN}${username}${NC}"
+    echo -e "Plan: ${CYAN}${copilot_plan}${NC}"
+    if [ "$cached" = "true" ]; then
+        echo -e "Data: ${YELLOW}Cached${NC} (checked at: $checked_at)"
+    else
+        echo -e "Data: ${GREEN}Fresh${NC} (checked at: $checked_at)"
+    fi
+    echo ""
+    
+    echo -e "${GREEN}Copilot Premium Model Requests:${NC}"
+    echo "  Total Limit:      $quota_limit requests"
+    echo "  Remaining:        $remaining requests"
+    echo "  Used:             $used requests"
+    
+    # Get today's usage from server
+    local used_today=0
+    if [ -n "$today_data" ]; then
+        used_today=$(echo "$today_data" | jq -r '.used_today // 0')
+    fi
+    echo "  Used today (UTC): $used_today requests (tracked by server)"
+    
+    # Calculate usage percentage
+    if [ "$quota_limit" -gt 0 ]; then
+        local usage_pct=$(echo "scale=1; ($used * 100) / $quota_limit" | bc)
+        echo "  Usage:            ${usage_pct}%"
+        echo "  Resets at:        $reset_date"
+    fi
+    
+    # Calculate recommendations
+    echo -e "\n${YELLOW}=== Daily Usage Recommendations ===${NC}"
+    
+    local current_time=$(date +%s)
+    local reset_timestamp=$(date -d "$reset_date" +%s 2>/dev/null || echo 0)
+    if [ "$reset_timestamp" -gt 0 ]; then
+        local time_until_reset=$((reset_timestamp - current_time))
+        local days_until_reset=$(echo "scale=0; $time_until_reset / 86400" | bc)
+        
+        if [ "$days_until_reset" -gt 0 ] && [ "$remaining" -gt 0 ]; then
+            local daily_budget=$(echo "scale=0; $remaining / $days_until_reset" | bc)
+            
+            echo -e "  ${GREEN}Recommended daily budget: $daily_budget requests/day${NC}"
+            echo "  (Based on $remaining requests over $days_until_reset days)"
+            
+            echo ""
+            echo -e "  ${CYAN}Today's usage (tracked by server):${NC}"
+            echo "    Used today: $used_today requests"
+            echo "    Daily budget: $daily_budget requests"
+            
+            local remaining_today=$((daily_budget - used_today))
+            if [ $remaining_today -lt 0 ]; then
+                local over_budget=$((remaining_today * -1))
+                echo -e "    Status: ${RED}⚠ Over budget by $over_budget requests${NC}"
+            elif [ $used_today -gt $((daily_budget * 3 / 4)) ]; then
+                echo -e "    Status: ${YELLOW}⚠ Used ${used_today}/${daily_budget} (approaching limit)${NC}"
+            else
+                echo -e "    Status: ${GREEN}✓ Used ${used_today}/${daily_budget}${NC}"
+            fi
+        fi
+    fi
+    
+    # Warnings
+    local warning_threshold=$(echo "scale=0; $quota_limit * 0.25" | bc | cut -d. -f1)
+    local notice_threshold=$(echo "scale=0; $quota_limit * 0.50" | bc | cut -d. -f1)
+    
+    if (( remaining < warning_threshold )); then
+        echo -e "\n  ${RED}⚠  WARNING: Less than 25% of requests remaining!${NC}"
+        echo -e "  ${YELLOW}Consider conserving requests until reset.${NC}"
+    elif (( remaining < notice_threshold )); then
+        echo -e "\n  ${YELLOW}⚠  NOTICE: Less than 50% of requests remaining.${NC}"
+        echo -e "  Monitor usage to avoid hitting limits."
+    fi
+    
+    echo ""
+}
+
+# Try to use server if available and not forced to use local
+SERVER_AVAILABLE=false
+if [ -n "$COPILOT_TRACKER_URL" ] && [ "$USE_LOCAL" = false ]; then
+    echo -e "${BLUE}=== GitHub Copilot Premium Request Usage ===${NC}"
+    echo -e "${CYAN}Checking server at ${COPILOT_TRACKER_URL}...${NC}"
+    
+    if check_server_health "$COPILOT_TRACKER_URL"; then
+        SERVER_AVAILABLE=true
+        GITHUB_TOKEN=$(get_github_token)
+        
+        if [ -z "$GITHUB_TOKEN" ]; then
+            echo -e "${YELLOW}Warning: Could not get GitHub token. Falling back to local check.${NC}"
+            SERVER_AVAILABLE=false
+        else
+            echo -e "${GREEN}Server available. Fetching usage data...${NC}\n"
+            
+            USAGE_RESPONSE=$(fetch_from_server "$COPILOT_TRACKER_URL" "$GITHUB_TOKEN")
+            if [ $? -eq 0 ] && [ -n "$USAGE_RESPONSE" ]; then
+                TODAY_RESPONSE=$(fetch_today_from_server "$COPILOT_TRACKER_URL" "$GITHUB_TOKEN")
+                display_server_results "$USAGE_RESPONSE" "$TODAY_RESPONSE"
+                exit 0
+            else
+                echo -e "${YELLOW}Failed to fetch from server. Falling back to local check.${NC}\n"
+                SERVER_AVAILABLE=false
+            fi
+        fi
+    else
+        echo -e "${YELLOW}Server not available. Using local check.${NC}\n"
+    fi
+fi
+
+# Only print header if we haven't already (i.e., server check wasn't attempted)
+if [ -z "$COPILOT_TRACKER_URL" ] || [ "$USE_LOCAL" = true ]; then
+    echo -e "${BLUE}=== GitHub Copilot Premium Request Usage ===${NC}\n"
+fi
+
+# Local check (fallback or explicit)
 
 # Check if gh CLI is available and authenticated
 if ! command -v gh &> /dev/null; then
