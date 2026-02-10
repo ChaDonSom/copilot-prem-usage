@@ -17,24 +17,45 @@ The application uses Laravel's encryption for storing GitHub tokens. This requir
 4. If missing, generate one locally: `php artisan key:generate --show`
 5. Copy the generated key and add it to Laravel Cloud environment variables
 
-#### 2. Database Not Migrated
+#### 2. Database Not Migrated or Not Set Up
 
-The application requires database tables to be created.
+The application requires:
+1. A PostgreSQL database (Laravel Cloud doesn't support SQLite)
+2. Database tables created via migrations
 
 **To Fix:**
-1. In Laravel Cloud, ensure migrations are run during deployment
-2. Or manually run: `php artisan migrate --force` in the Laravel Cloud console
 
-#### 3. Missing Database Connection
+First, ensure you have a PostgreSQL database provisioned in Laravel Cloud:
+1. Go to your Laravel Cloud project dashboard
+2. Navigate to "Databases" section
+3. Create a new PostgreSQL database (free tier available)
+4. Note the connection details provided
+
+Then set the environment variables and run migrations:
+1. Add database environment variables (see Environment Variables section below)
+2. In Laravel Cloud console, run: `php artisan migrate --force`
+
+Or ensure migrations are set to run automatically during deployment.
+
+#### 3. PostgreSQL Database Not Configured
+
+**IMPORTANT:** Laravel Cloud only supports PostgreSQL databases (and Redis/Valkey for caching).  
+SQLite is NOT supported in production.
 
 Ensure these environment variables are set in Laravel Cloud:
-- `DB_CONNECTION` (e.g., `sqlite`, `mysql`, `pgsql`)
-- `DB_DATABASE` (database name or path for SQLite)
-- For MySQL/PostgreSQL:
-  - `DB_HOST`
-  - `DB_PORT`
-  - `DB_USERNAME`
-  - `DB_PASSWORD`
+- `DB_CONNECTION=pgsql` (required for production)
+- `DB_HOST` (provided by Laravel Cloud when you create a database)
+- `DB_PORT=5432` (default PostgreSQL port)
+- `DB_DATABASE` (your database name)
+- `DB_USERNAME` (provided by Laravel Cloud)
+- `DB_PASSWORD` (provided by Laravel Cloud)
+
+**Steps to set up:**
+1. In Laravel Cloud dashboard, go to "Databases"
+2. Create a new PostgreSQL database (free tier: $0 for no usage)
+3. Copy the connection details
+4. Add them to your environment variables
+5. Run migrations: `php artisan migrate --force`
 
 ## Testing the Deployment
 
@@ -68,14 +89,18 @@ In Laravel Cloud dashboard:
 
 ## Quick Deployment Checklist
 
-- [ ] `APP_KEY` is set
-- [ ] `APP_ENV` is set (e.g., `production`)
-- [ ] `APP_DEBUG` is `false` for production
-- [ ] Database connection is configured
-- [ ] Migrations have been run
+- [ ] PostgreSQL database created in Laravel Cloud
+- [ ] `APP_KEY` is set (generate with `php artisan key:generate --show`)
+- [ ] `APP_ENV=production`
+- [ ] `APP_DEBUG=false` for production
+- [ ] Database connection configured (`DB_CONNECTION=pgsql`)
+- [ ] All PostgreSQL credentials set (`DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`)
+- [ ] Migrations have been run (`php artisan migrate --force`)
 - [ ] Storage directories are writable
 
 ## Environment Variables Template
+
+**For Laravel Cloud (Production):**
 
 ```env
 APP_NAME="Copilot Tracker"
@@ -85,11 +110,33 @@ APP_DEBUG=false
 APP_TIMEZONE=UTC
 APP_URL=https://copilot-tracker-master-qpfpif.laravel.cloud
 
-DB_CONNECTION=sqlite
-DB_DATABASE=/path/to/database.sqlite
+# PostgreSQL Database (Required for Laravel Cloud)
+DB_CONNECTION=pgsql
+DB_HOST=your-postgres-host.laravel.cloud
+DB_PORT=5432
+DB_DATABASE=your-database-name
+DB_USERNAME=your-username
+DB_PASSWORD=your-password
 
 LOG_CHANNEL=stack
 LOG_LEVEL=info
+```
+
+**For Local Development:**
+
+```env
+APP_NAME="Copilot Tracker"
+APP_ENV=local
+APP_KEY=base64:YOUR_KEY_HERE
+APP_DEBUG=true
+APP_URL=http://localhost
+
+# SQLite for local (easy setup)
+DB_CONNECTION=sqlite
+# DB_DATABASE will default to database/database.sqlite
+
+LOG_CHANNEL=stack
+LOG_LEVEL=debug
 ```
 
 ## Next Steps

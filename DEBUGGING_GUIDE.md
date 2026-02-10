@@ -34,7 +34,43 @@ The generic "Server Error" message means Laravel is hiding the actual error deta
 
 ## Most Likely Causes (in order)
 
-### 1. ❗ Missing or Invalid APP_KEY (MOST LIKELY)
+### 1. ❗ PostgreSQL Database Not Set Up (MOST LIKELY)
+
+**Laravel Cloud only supports PostgreSQL** (SQLite is not supported in production).
+
+**Error you might see:**
+```
+Database file at path [/var/www/html/database/database.sqlite] does not exist
+```
+
+**To Fix:**
+
+1. **Create PostgreSQL Database in Laravel Cloud:**
+   - Go to your Laravel Cloud dashboard
+   - Navigate to "Databases" section
+   - Click "Create Database"
+   - Select PostgreSQL
+   - Note: Free tier costs $0 for no usage
+   - Copy the connection credentials provided
+
+2. **Set Environment Variables:**
+   In Laravel Cloud environment settings, add:
+   ```
+   DB_CONNECTION=pgsql
+   DB_HOST=[provided by Laravel Cloud]
+   DB_PORT=5432
+   DB_DATABASE=[your database name]
+   DB_USERNAME=[provided by Laravel Cloud]
+   DB_PASSWORD=[provided by Laravel Cloud]
+   ```
+
+3. **Run Migrations:**
+   In Laravel Cloud console:
+   ```bash
+   php artisan migrate --force
+   ```
+
+### 2. ❗ Missing or Invalid APP_KEY
 Laravel uses encryption to store GitHub tokens. Without a valid `APP_KEY`, encryption fails.
 
 **To Fix:**
@@ -49,8 +85,8 @@ Then in Laravel Cloud:
 - Add/update environment variable: `APP_KEY=base64:YOUR_GENERATED_KEY`
 - Redeploy
 
-### 2. Database Not Set Up
-Tables need to be created via migrations.
+### 3. Database Migrations Not Run
+After setting up PostgreSQL, tables need to be created via migrations.
 
 **To Check:**
 In Laravel Cloud console, run:
@@ -62,11 +98,6 @@ php artisan migrate:status
 ```bash
 php artisan migrate --force
 ```
-
-### 3. Wrong Database Configuration
-Ensure these are set in Laravel Cloud environment:
-- `DB_CONNECTION=sqlite` (or mysql, pgsql)
-- `DB_DATABASE=/path/to/database.sqlite` (for SQLite)
 
 ## How to Debug Further
 
