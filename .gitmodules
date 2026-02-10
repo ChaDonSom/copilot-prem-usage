@@ -1,0 +1,3 @@
+[submodule "copilot-tracker"]
+	path = copilot-tracker
+	url = https://github.com/ChaDonSom/copilot-tracker.git
