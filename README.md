@@ -28,26 +28,29 @@ This endpoint returns:
 ## Requirements
 
 - `gh` (GitHub CLI) - [Install from here](https://cli.github.com/)
-- `jq` - JSON parser
-- `bc` - Calculator for bash
+- `python3` (3.11+) for the CLI wrappers and tests
 
 ## Installation
 
 1. Install dependencies:
 ```bash
-# Install jq and bc
-sudo apt-get install -y jq bc
-
-# Install GitHub CLI if needed
-# Visit: https://cli.github.com/
+sudo apt-get install -y python3 python3-venv # if needed
+# Install GitHub CLI if needed: https://cli.github.com/
 ```
 
-2. Authenticate with GitHub:
+2. (Optional for development) Set up a virtualenv for tests:
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+```
+
+3. Authenticate with GitHub:
 ```bash
 gh auth login
 ```
 
-3. Make the script executable:
+4. Make the script executable (or call the Python entrypoint directly):
 ```bash
 chmod +x check-copilot-usage.sh
 ```
@@ -58,6 +61,16 @@ Simply run the script - no input needed!
 
 ```bash
 ./check-copilot-usage.sh
+# or
+python3 copilot_usage.py check
+```
+
+To record history and rate data:
+
+```bash
+./track-usage.sh
+# or
+python3 copilot_usage.py track
 ```
 
 ### Example Output

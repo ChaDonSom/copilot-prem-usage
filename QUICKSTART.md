@@ -77,10 +77,10 @@ Accessible via the `gh` CLI with your normal GitHub token.
 
 1. Install dependencies:
 ```bash
-sudo apt-get install -y jq bc
+sudo apt-get install -y python3 python3-venv # if needed
 ```
 
-2. Make scripts executable:
+2. Make scripts executable (optional if calling Python directly):
 ```bash
 chmod +x check-copilot-usage.sh track-usage.sh
 ```
@@ -88,6 +88,13 @@ chmod +x check-copilot-usage.sh track-usage.sh
 3. Run:
 ```bash
 ./check-copilot-usage.sh
+# or
+python3 copilot_usage.py check
+
+# Track history:
+./track-usage.sh
+# or
+python3 copilot_usage.py track
 ```
 
 ## Pro Tips
