@@ -1,6 +1,7 @@
 # Next Steps to Fix Laravel Cloud Deployment
 
 ## The Problem
+
 Laravel Cloud doesn't support SQLite - it only supports **PostgreSQL** and Redis/Valkey.
 
 ## The Solution (3 Steps)
@@ -29,6 +30,7 @@ DB_PASSWORD=[from Step 1]
 ```
 
 Also ensure you have:
+
 ```env
 APP_KEY=base64:[generate with: php artisan key:generate --show]
 APP_ENV=production
@@ -64,6 +66,7 @@ You should see your usage data instead of an error! ✅
 ## What Changed
 
 I've updated the code to:
+
 - ✅ Use PostgreSQL in production automatically
 - ✅ Keep SQLite for local development
 - ✅ Show better error messages
