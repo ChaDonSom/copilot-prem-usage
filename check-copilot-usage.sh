@@ -222,8 +222,11 @@ else
                     
                     echo ""
                     echo -e "  ${CYAN}Current trajectory ($LOCAL_TZ - ${LOCAL_TIME}):${NC}"
-                    echo "    Recommended % left at this time: ${RECOMMENDED_PCT_LEFT}% (EOD target: ${RECOMMENDED_PCT_LEFT_EOD}%)"
-                    echo "    Actual % remaining: ${PERCENT_REMAINING}%"
+                    # Format recommended remaining requests as integers beside percentages
+                    RECOMMENDED_REMAINING_INT=$(printf "%.0f" "$RECOMMENDED_REMAINING")
+                    RECOMMENDED_REMAINING_EOD_INT=$(printf "%.0f" "$RECOMMENDED_REMAINING_EOD")
+                    echo "    Recommended left at this time: ${RECOMMENDED_PCT_LEFT}% (${RECOMMENDED_REMAINING_INT} requests) (EOD target: ${RECOMMENDED_PCT_LEFT_EOD}% (${RECOMMENDED_REMAINING_EOD_INT} requests))"
+                    echo "    Actual remaining: ${PERCENT_REMAINING}% (${REMAINING_REQUESTS} requests)"
                     
                     # Show status
                     AHEAD_BEHIND=$(echo "$PERCENT_REMAINING - $RECOMMENDED_PCT_LEFT" | bc)
