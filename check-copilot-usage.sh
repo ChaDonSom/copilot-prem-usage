@@ -240,12 +240,16 @@ else
                     RECOMMENDED_REMAINING_EOD_INT=$(printf "%.0f" "$RECOMMENDED_REMAINING_EOD")
                     # Calculate numeric differences between actual remaining and recommendations
                     DIFF_NOW=$((REMAINING_REQUESTS - RECOMMENDED_REMAINING_INT))
-                    DIFF_EOD=$((REMAINING_REQUESTS - RECOMMENDED_REMAINING_EOD_INT))
+                    # How many requests are still available today to stay on the EOD target
+                    AVAILABLE_TODAY=$((DAILY_BUDGET - USED_TODAY))
+                    # Raw diff between actual remaining and recommended EOD remaining (for reference)
+                    RAW_DIFF_EOD=$((REMAINING_REQUESTS - RECOMMENDED_REMAINING_EOD_INT))
                     echo "    Recommended left at this time: ${RECOMMENDED_PCT_LEFT}% (${RECOMMENDED_REMAINING_INT} requests) (EOD target: ${RECOMMENDED_PCT_LEFT_EOD}% (${RECOMMENDED_REMAINING_EOD_INT} requests))"
                     printf "    Actual remaining: %s (%d requests)\n" "${PERCENT_REMAINING}%" "${REMAINING_REQUESTS}"
                     # Show numeric differences
                     printf "    Difference (now): %+d requests\n" "$DIFF_NOW"
-                    printf "    Difference (EOD target): %+d requests\n" "$DIFF_EOD"
+                    printf "    Remaining available today to stay on EOD target: %+d requests\n" "$AVAILABLE_TODAY"
+                    printf "    (Raw diff vs EOD recommended remaining: %+d requests)\n" "$RAW_DIFF_EOD"
 
                     # Show status
                     AHEAD_BEHIND=$(echo "$PERCENT_REMAINING - $RECOMMENDED_PCT_LEFT" | bc)
