@@ -120,6 +120,19 @@ if [ -f "$USAGE_CACHE_FILE" ]; then
     fi
 fi
 
+# If cache didn't capture changes (e.g., this script wasn't run earlier today), try history file as a fallback
+HISTORY_FILE="$HOME/.copilot-usage-history.csv"
+if [ "$USED_TODAY" -eq 0 ] && [ -f "$HISTORY_FILE" ]; then
+    FIRST_USED=$(awk -F, -v d="$CURRENT_UTC_DATE" 'NR>1 && $1 ~ d {print $3; exit}' "$HISTORY_FILE" || echo "")
+    LAST_USED=$(awk -F, -v d="$CURRENT_UTC_DATE" 'NR>1 && $1 ~ d {u=$3} END{if(u)print u}' "$HISTORY_FILE" || echo "")
+    if [ -n "$FIRST_USED" ] && [ -n "$LAST_USED" ]; then
+        USED_TODAY=$((LAST_USED - FIRST_USED))
+        if [ $USED_TODAY -lt 0 ]; then
+            USED_TODAY=0
+        fi
+    fi
+fi
+
 # Update cache with current data
 echo "$CURRENT_UTC_DATE" > "$USAGE_CACHE_FILE"
 echo "$REMAINING_REQUESTS" >> "$USAGE_CACHE_FILE"
