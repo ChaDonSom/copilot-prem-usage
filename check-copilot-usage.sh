@@ -180,7 +180,8 @@ display_server_results() {
     echo -e "\n${YELLOW}=== Daily Usage Recommendations ===${NC}"
     
     local current_time=$(date +%s)
-    local reset_timestamp=$(date -d "$reset_date" +%s 2>/dev/null || echo 0)
+    # Try Linux date format first, fall back to macOS
+    local reset_timestamp=$(date -d "$reset_date" +%s 2>/dev/null || date -j -f "%Y-%m-%d" "$reset_date" "+%s" 2>/dev/null || echo 0)
     if [ "$reset_timestamp" -gt 0 ]; then
         local time_until_reset=$((reset_timestamp - current_time))
         local days_until_reset=$(echo "scale=0; $time_until_reset / 86400" | bc)
