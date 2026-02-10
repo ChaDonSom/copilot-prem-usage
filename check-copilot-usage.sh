@@ -85,8 +85,12 @@ fi
 USED_REQUESTS=$((LIMIT_REQUESTS - REMAINING_REQUESTS))
 RESET_TIME="$RESET_DATE"
 
-# Current time
+# Current time (UTC for quota reset tracking)
 CURRENT_TIME=$(date +%s)
+CURRENT_UTC_DATE=$(date -u +%Y-%m-%d)
+
+# Timezone for workday calculations
+LOCAL_TZ="America/New_York"
 
 # Display Copilot Premium Request Usage
 echo -e "\n${GREEN}Copilot Premium Model Requests:${NC}"
@@ -94,6 +98,33 @@ echo "  Total Limit:      $LIMIT_REQUESTS requests"
 echo "  Remaining:        $REMAINING_REQUESTS requests"
 USED_REQUESTS=$((LIMIT_REQUESTS - REMAINING_REQUESTS))
 echo "  Used:             $USED_REQUESTS requests"
+
+# Track daily usage (UTC-based day)
+USAGE_CACHE_FILE="/tmp/gh-copilot-usage-tracker.txt"
+USED_TODAY=0
+
+if [ -f "$USAGE_CACHE_FILE" ]; then
+    CACHED_DATE=$(head -n 1 "$USAGE_CACHE_FILE")
+    CACHED_REMAINING=$(tail -n 1 "$USAGE_CACHE_FILE")
+    
+    if [ "$CACHED_DATE" = "$CURRENT_UTC_DATE" ]; then
+        # Same day - calculate usage since last check
+        USED_TODAY=$((CACHED_REMAINING - REMAINING_REQUESTS))
+        if [ $USED_TODAY -lt 0 ]; then
+            # Quota may have reset or refreshed
+            USED_TODAY=0
+        fi
+    else
+        # New day - reset counter
+        USED_TODAY=0
+    fi
+fi
+
+# Update cache with current data
+echo "$CURRENT_UTC_DATE" > "$USAGE_CACHE_FILE"
+echo "$REMAINING_REQUESTS" >> "$USAGE_CACHE_FILE"
+
+echo "  Used today (UTC): $USED_TODAY requests"
 
 # Calculate usage percentage
 if [ "$LIMIT_REQUESTS" -gt 0 ]; then
@@ -149,6 +180,66 @@ else
                 echo "    Conservative (12h/day): ~${CONSERVATIVE_HOURLY} requests/hour"
                 echo "    Moderate (10h/day):     ~${MODERATE_HOURLY} requests/hour"
                 echo "    Focused (8h/day):       ~${AGGRESSIVE_HOURLY} requests/hour"
+                
+                # Calculate recommended percentage left at current time (local timezone)
+                CURRENT_HOUR=$(TZ="$LOCAL_TZ" date +%H)
+                CURRENT_MINUTE=$(TZ="$LOCAL_TZ" date +%M)
+                HOURS_INTO_DAY=$(echo "scale=2; $CURRENT_HOUR + $CURRENT_MINUTE / 60" | bc)
+                LOCAL_TIME=$(TZ="$LOCAL_TZ" date "+%H:%M")
+                
+                # Assume workday starts at 9 AM and ends at 6 PM (9 hours)
+                WORKDAY_START=9
+                WORKDAY_END=18
+                WORKDAY_HOURS=$((WORKDAY_END - WORKDAY_START))
+                
+                echo ""
+                echo -e "  ${CYAN}Today's usage (UTC day):${NC}"
+                echo "    Used today: $USED_TODAY requests"
+                echo "    Daily budget: $DAILY_BUDGET requests"
+                
+                REMAINING_TODAY=$((DAILY_BUDGET - USED_TODAY))
+                if [ $REMAINING_TODAY -lt 0 ]; then
+                    OVER_BUDGET=$((REMAINING_TODAY * -1))
+                    echo -e "    Status: ${RED}⚠ Over budget by $OVER_BUDGET requests${NC}"
+                elif [ $USED_TODAY -gt $((DAILY_BUDGET * 3 / 4)) ]; then
+                    echo -e "    Status: ${YELLOW}⚠ Used ${USED_TODAY}/${DAILY_BUDGET} (approaching limit)${NC}"
+                else
+                    echo -e "    Status: ${GREEN}✓ Used ${USED_TODAY}/${DAILY_BUDGET}${NC}"
+                fi
+                
+                if (( $(echo "$CURRENT_HOUR >= $WORKDAY_START && $CURRENT_HOUR < $WORKDAY_END" | bc -l) )); then
+                    HOURS_INTO_WORKDAY=$(echo "scale=2; $HOURS_INTO_DAY - $WORKDAY_START" | bc)
+                    FRACTION_OF_DAY_ELAPSED=$(echo "scale=4; $HOURS_INTO_WORKDAY / $WORKDAY_HOURS" | bc)
+                    
+                    # Calculate recommended percentage left now
+                    RECOMMENDED_REQUESTS_USED=$(echo "scale=2; $DAILY_BUDGET * $FRACTION_OF_DAY_ELAPSED" | bc)
+                    RECOMMENDED_REMAINING=$(echo "scale=2; $REMAINING_REQUESTS - $RECOMMENDED_REQUESTS_USED" | bc)
+                    RECOMMENDED_PCT_LEFT=$(echo "scale=1; ($RECOMMENDED_REMAINING * 100) / $LIMIT_REQUESTS" | bc)
+                    
+                    # Calculate recommended percentage left at end of day
+                    RECOMMENDED_REMAINING_EOD=$(echo "scale=2; $REMAINING_REQUESTS - $DAILY_BUDGET" | bc)
+                    RECOMMENDED_PCT_LEFT_EOD=$(echo "scale=1; ($RECOMMENDED_REMAINING_EOD * 100) / $LIMIT_REQUESTS" | bc)
+                    
+                    echo ""
+                    echo -e "  ${CYAN}Current trajectory ($LOCAL_TZ - ${LOCAL_TIME}):${NC}"
+                    echo "    Recommended % left at this time: ${RECOMMENDED_PCT_LEFT}% (EOD target: ${RECOMMENDED_PCT_LEFT_EOD}%)"
+                    echo "    Actual % remaining: ${PERCENT_REMAINING}%"
+                    
+                    # Show status
+                    AHEAD_BEHIND=$(echo "$PERCENT_REMAINING - $RECOMMENDED_PCT_LEFT" | bc)
+                    if (( $(echo "$AHEAD_BEHIND > 1" | bc -l) )); then
+                        echo -e "    Status: ${GREEN}✓ On track (${AHEAD_BEHIND}% ahead)${NC}"
+                    elif (( $(echo "$AHEAD_BEHIND < -1" | bc -l) )); then
+                        BEHIND_POSITIVE=$(echo "$AHEAD_BEHIND * -1" | bc)
+                        echo -e "    Status: ${YELLOW}⚠ Behind pace (${BEHIND_POSITIVE}% behind)${NC}"
+                    else
+                        echo -e "    Status: ${GREEN}✓ On track${NC}"
+                    fi
+                else
+                    echo ""
+                    echo -e "  ${CYAN}Note: Trajectory tracking is for 9AM-6PM $LOCAL_TZ workday hours${NC}"
+                    echo "    Current local time: $LOCAL_TIME"
+                fi
             fi
         fi
     fi
