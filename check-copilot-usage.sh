@@ -89,22 +89,29 @@ fetch_from_server() {
     
     if [ "$FORCE_REFRESH" = true ]; then
         endpoint="/api/usage/refresh"
-        local response=$(curl -sf --max-time 10 -X POST \
+        local http_code=$(curl -s -w "%{http_code}" -o /tmp/copilot-response.json --max-time 10 -X POST \
             -H "Authorization: Bearer $token" \
             -H "Accept: application/json" \
-            "${url}${endpoint}" 2>&1)
+            "${url}${endpoint}")
     else
-        local response=$(curl -sf --max-time 10 \
+        local http_code=$(curl -s -w "%{http_code}" -o /tmp/copilot-response.json --max-time 10 \
             -H "Authorization: Bearer $token" \
             -H "Accept: application/json" \
-            "${url}${endpoint}" 2>&1)
+            "${url}${endpoint}")
     fi
     
-    if [ $? -eq 0 ] && [ -n "$response" ]; then
+    local response=$(cat /tmp/copilot-response.json 2>/dev/null)
+    
+    if [ "$http_code" = "200" ] && [ -n "$response" ]; then
         echo "$response"
         return 0
+    else
+        echo -e "${RED}Server error (HTTP $http_code):${NC}" >&2
+        if [ -n "$response" ]; then
+            echo "$response" | jq -r '.message // .error // "Unknown error"' 2>/dev/null || echo "$response" >&2
+        fi
+        return 1
     fi
-    return 1
 }
 
 # Function to fetch today's usage from server
@@ -112,12 +119,14 @@ fetch_today_from_server() {
     local url="$1"
     local token="$2"
     
-    local response=$(curl -sf --max-time 10 \
+    local http_code=$(curl -s -w "%{http_code}" -o /tmp/copilot-today-response.json --max-time 10 \
         -H "Authorization: Bearer $token" \
         -H "Accept: application/json" \
-        "${url}/api/usage/today" 2>&1)
+        "${url}/api/usage/today")
     
-    if [ $? -eq 0 ] && [ -n "$response" ]; then
+    local response=$(cat /tmp/copilot-today-response.json 2>/dev/null)
+    
+    if [ "$http_code" = "200" ] && [ -n "$response" ]; then
         echo "$response"
         return 0
     fi
