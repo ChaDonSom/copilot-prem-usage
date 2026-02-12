@@ -1,0 +1,10 @@
+{
+  "servers": {
+    "laravel boost": {
+      "type": "stdio",
+      "command": "php",
+      "args": ["/home/chadonsom/copilot-prem-usage/copilot-tracker/artisan", "boost:mcp"]
+    }
+  },
+  "inputs": []
+}
